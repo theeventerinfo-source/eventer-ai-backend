@@ -18,7 +18,7 @@ const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 let partnersCache = null;
 let categoriesCache = null;
 let cacheTime = null;
-const CACHE_DURATION = 10 * 60 * 1000;
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minuta
 
 async function fetchAllItems(collectionId) {
   let allItems = [];
@@ -54,23 +54,26 @@ async function getPartnersAndCategories() {
     return { partners: partnersCache, categories: categoriesCache };
   }
 
-  console.log('Dohvacam partnere iz Webflow CMS-a...');
+  console.log('Dohvaćam partnere iz Webflow CMS-a...');
 
   const [partnersRaw, categoriesRaw] = await Promise.all([
     fetchAllItems(PARTNERS_COLLECTION_ID),
     fetchAllItems(CATEGORIES_COLLECTION_ID),
   ]);
 
+  // Mapiraj kategorije po ID-u
   const categoryMap = {};
   for (const cat of categoriesRaw) {
     categoryMap[cat.id] = cat.fieldData?.name || cat.fieldData?.naziv || 'Ostalo';
   }
 
+  // Procesiraj partnere
   const partners = partnersRaw
     .filter(p => p.fieldData && !p.isDraft && !p.isArchived)
     .map(p => {
       const fd = p.fieldData;
 
+      // Pronađi tier (Premium, Plus, Basic)
       let tier = 'Basic';
       const tierField = fd['tier'] || fd['paket'] || fd['plan'] || '';
       if (typeof tierField === 'string') {
@@ -78,6 +81,7 @@ async function getPartnersAndCategories() {
         else if (tierField.toLowerCase().includes('plus')) tier = 'Plus';
       }
 
+      // Pronađi kategoriju
       let categoryName = 'Ostalo';
       const catRef = fd['kategorija-usluge'] || fd['category'] || fd['kategorija'];
       if (catRef) {
@@ -99,6 +103,7 @@ async function getPartnersAndCategories() {
       };
     });
 
+  // Sortiraj: Premium → Plus → Basic
   partners.sort((a, b) => {
     const tierOrder = { Premium: 0, Plus: 1, Basic: 2 };
     return (tierOrder[a.tier] ?? 2) - (tierOrder[b.tier] ?? 2);
@@ -108,11 +113,12 @@ async function getPartnersAndCategories() {
   categoriesCache = Object.values(categoryMap);
   cacheTime = now;
 
-  console.log(`Ucitano ${partners.length} partnera, ${categoriesCache.length} kategorija`);
+  console.log(`Učitano ${partners.length} partnera, ${categoriesCache.length} kategorija`);
   return { partners, categories: categoriesCache };
 }
 
 function buildSystemPrompt(partners, categories) {
+  // Grupiraj partnere po kategoriji i tieru
   const byCategory = {};
   for (const p of partners) {
     if (!byCategory[p.category]) byCategory[p.category] = { Premium: [], Plus: [], Basic: [] };
@@ -128,7 +134,7 @@ function buildSystemPrompt(partners, categories) {
         for (const p of tiers[tier]) {
           partnersContext += `- ${p.name}`;
           if (p.location) partnersContext += ` (${p.location})`;
-          if (p.description) partnersContext += ` - ${p.description}`;
+          if (p.description) partnersContext += ` — ${p.description}`;
           if (p.website) partnersContext += ` [web: ${p.website}]`;
           partnersContext += '\n';
         }
@@ -136,32 +142,37 @@ function buildSystemPrompt(partners, categories) {
     }
   }
 
-  return `Ti si Eventer AI, strucni asistent za planiranje evenata na platformi The Eventer. Pomazes korisnicima isplanirati savrsen event koristeci ISKLJUCIVO partnere s The Eventer platforme.
+  return `Ti si Eventer AI, stručni asistent za planiranje evenata na platformi The Eventer. Pomažeš korisnicima isplanirati savršen event koristeći ISKLJUČIVO partnere s The Eventer platforme.
 
-## Pravila koja UVIJEK moras slijediti:
+## Pravila koja UVIJEK moraš slijediti:
 
-1. **Predlazes SAMO partnere s ove liste** - nikad vanjskih servisa, brendova ili tvrtki koje nisu ovdje.
-2. **Prioritet:** Uvijek prvo predlozi **Premium** partnere, zatim **Plus**, pa tek onda **Basic** - za svaku kategoriju.
-3. **Postavljaj potpitanja** - ne daj plan dok nemas dovoljno informacija. Pitaj o:
-   - Vrsti eventa (vjencanje, rodjendan, korporativni event, itd.)
+1. **Predlažeš SAMO partnere s ove liste** — nikad vanjskih servisa, brendova ili tvrtki koje nisu ovdje.
+2. **Prioritet:** Uvijek prvo predloži **Premium** partnere, zatim **Plus**, pa tek onda **Basic** — za svaku kategoriju.
+3. **Postavljaj potpitanja** — ne daj plan dok nemaš dovoljno informacija. Pitaj o:
+   - Vrsti eventa (vjenčanje, rođendan, korporativni event, itd.)
    - Lokaciji / gradu
    - Broju gostiju
    - Datumu ili periodu
-   - Budzetu (okvirno)
+   - Budžetu (okvirno)
    - Posebnim zahtjevima
-4. **Prikupljaj info postupno** - ne bombardiraj s previse pitanja odjednom. Postavi 2-3 kljucna pitanja, pricekaj odgovor, pa nastavi.
-5. **Na kraju generiraj strukturirani plan** s konkretnim partnerima, okvirnim cijenama ako imas info, i sljedecim koracima.
-6. **Jezik:** Uvijek odgovaraj na hrvatskom jeziku.
-7. **Ton:** Prijatan, strucan, entuzijasticnan - kao osobni event planer.
+4. **Prikupljaj info postupno** — ne bombardiraj s previše pitanja odjednom. Postavi 2-3 ključna pitanja, pričekaj odgovor, pa nastavi.
+5. **Kad predlažeš partnera, UVIJEK uz ime partnera odmah daj sve dostupne kontakte** — telefon, email i website. Format:
+   - **Naziv partnera** (Premium/Plus/Basic) — kratki opis
+     📞 telefon | ✉️ email | 🌐 website
+   Ako neki kontakt podatak nedostaje za partnera, ne izmišljaj — preskoči samo taj podatak.
+6. **Na kraju razgovora kad daš plan, uvijek dodaj sekciju "📋 Sažetak svih kontakata"** gdje sumiraš sve preporučene partnere s njihovim kontaktima u jasnoj listi koju korisnik može lako kopirati.
+7. **Jezik:** Uvijek odgovaraj na hrvatskom jeziku.
+8. **Ton:** Prijatan, stručan, entuzijastičan — kao osobni event planer.
 
 ## Dostupni partneri na platformi:
 ${partnersContext}
 
 ## Kategorije usluga: ${categories.join(', ')}
 
-Zapamti: tvoj cilj je pomoci korisniku da organizira nevjerojatan event koristeci The Eventer partnere!`;
+Zapamti: tvoj cilj je pomoći korisniku da organizira nevjerojatan event koristeći The Eventer partnere — i da ima sve kontakte odmah pri ruci!`;
 }
 
+// Glavna chat ruta
 app.post('/chat', async (req, res) => {
   try {
     const { messages } = req.body;
@@ -180,24 +191,26 @@ app.post('/chat', async (req, res) => {
       messages: messages,
     });
 
-    const assistantMessage = response.content?.[0]?.text || 'Nesto je poslo po krivu. Pokusaj ponovo.';
+    const assistantMessage = response.content?.[0]?.text || 'Nešto je pošlo po krivu. Pokušaj ponovo.';
 
     res.json({ message: assistantMessage });
   } catch (error) {
-    console.error('Greska:', error.message);
-    res.status(500).json({ error: 'Interna greska servera', details: error.message });
+    console.error('Greška:', error.message);
+    res.status(500).json({ error: 'Interna greška servera', details: error.message });
   }
 });
 
+// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Invalidate cache (za slučaj da dodaš partnera i hoćeš odmah)
 app.post('/refresh-cache', (req, res) => {
   partnersCache = null;
   categoriesCache = null;
   cacheTime = null;
-  res.json({ message: 'Cache invalidiran.' });
+  res.json({ message: 'Cache invalidiran — sljedeći chat dohvatit će svježe podatke.' });
 });
 
 const PORT = process.env.PORT || 3000;
