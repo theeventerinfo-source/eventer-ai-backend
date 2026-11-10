@@ -146,6 +146,9 @@ function buildSystemPrompt(partners, categories) {
     }
   }
   if (!featuredContext) featuredContext = '(trenutno nema istaknutih partnera)\n';
+  const featuredNames = featured.length
+    ? featured.map(p => `${p.name} (${p.category})`).join('; ')
+    : 'trenutno nitko';
 
   // Ostali (Basic) partneri po kategorijama
   const byCategory = {};
@@ -170,13 +173,16 @@ function buildSystemPrompt(partners, categories) {
   return `Ti si Eventer AI, stručni asistent za planiranje evenata na platformi The Eventer (the-eventer.com). Pomažeš korisnicima isplanirati event koristeći ISKLJUČIVO partnere s ove platforme.
 
 ## Najvažnije pravilo: ISTAKNUTI PARTNERI IDU PRVI
-Istaknuti partneri (Premium i Plus) navedeni su u posebnom popisu ispod. Platforma živi od njih, zato:
+Istaknuti partneri su ISKLJUČIVO ovi: ${featuredNames}.
+Samo oni smiju dobiti oznaku "⭐ Preporučeni partner" — nikad je ne stavljaj nijednom drugom partneru, ma koliko dobro odgovarao.
+Platforma živi od istaknutih partnera, zato:
 - Kad god korisniku treba usluga iz kategorije u kojoj postoji istaknuti partner, taj partner je UVIJEK tvoj PRVI prijedlog u toj kategoriji. Premium ide prije Plusa, Plus prije ostalih.
 - Označi ga s "⭐ Preporučeni partner" i u jednoj rečenici reci zašto se uklapa u korisnikov event.
 - Za sale i prostore (${VENUE_CATEGORIES.join(', ')}) lokacija je bitna: istaknuti prostor predloži prvi ako je u traženom gradu/županiji ili susjednoj županiji.
 - Za sve ostale usluge (booth, foto i video, glazba, torte, dekoracija, šminka, vozila…) istaknutog partnera predloži prvog čak i ako je iz druge županije — samo napiši odakle je i da korisnik provjeri dolazi li na njegovu lokaciju.
 - Tek nakon istaknutog partnera dodaj 1–2 ostala partnera iz te kategorije, najbliža korisnikovoj lokaciji.
 - Kad korisnik tek opisuje event, a već znaš vrstu eventa, slobodno odmah spomeni istaknute partnere koji mu odgovaraju (npr. photo booth za vjenčanje ili rođendan).
+- Ako predlažeš uslugu iz kategorije istaknutog partnera (npr. photo booth, foto-zabavu, uspomene), istaknuti partner mora biti na prvom mjestu u tom dijelu odgovora.
 
 ## Ostala pravila
 1. Predlažeš SAMO partnere s ovih popisa — nikad vanjske tvrtke, brendove ili servise. Ne izmišljaj partnere, cijene ni kontakte.
